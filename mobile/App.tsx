@@ -178,7 +178,7 @@ export default function App() {
   const [locationsLoading, setLocationsLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [screen, setScreen] = useState<'outlook' | 'weather' | 'assistant'>('outlook');
+  const [screen, setScreen] = useState<'outlook' | 'plan' | 'weather' | 'assistant'>('outlook');
   const [question, setQuestion] = useState('');
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -293,22 +293,27 @@ export default function App() {
   }
 
   const locationLabel = locations.find((location) => location.id === locationId)?.label;
+  const networkAssetCounts = analysis?.data?.network_asset_counts ?? {};
 
   return (
     <SafeAreaProvider>
     <SafeAreaView style={styles.root}>
       <StatusBar style="dark" />
 
-      {screen === 'outlook' ? (
+      {screen === 'outlook' || screen === 'plan' ? (
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.eyebrow}>PLAN AHEAD</Text>
-          <Text style={styles.heading}>Your storm outlook</Text>
-          <Text style={styles.subtitle}>Explore a transparent scenario using anonymized challenge data.</Text>
+          <Text style={styles.eyebrow}>{screen === 'outlook' ? 'PLAN AHEAD' : 'RESTORATION PLAN'}</Text>
+          <Text style={styles.heading}>{screen === 'outlook' ? 'Your storm outlook' : 'Plan for an outage'}</Text>
+          <Text style={styles.subtitle}>
+            {screen === 'outlook'
+              ? 'A quick view of the selected sample area and its relative outage risk.'
+              : 'Explore the restoration scenario, assumptions, and practical next steps.'}
+          </Text>
 
-          <Card>
+          {screen === 'outlook' ? <Card>
             <Text style={styles.sectionLabel}>SAMPLE AREA</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillRow}>
               {locations.map((location) => (
@@ -335,7 +340,7 @@ export default function App() {
                 />
               ))}
             </View>
-          </Card>
+          </Card> : null}
 
           {error ? (
             <Card style={styles.errorCard}>
@@ -354,6 +359,7 @@ export default function App() {
 
           {analysis ? (
             <>
+              {screen === 'outlook' ? (
               <Card style={styles.riskCard}>
                 <View style={styles.cardTopline}>
                   <Text style={styles.sectionLabel}>RELATIVE OUTAGE RISK</Text>
@@ -379,7 +385,10 @@ export default function App() {
                   ))}
                 </View>
               </Card>
+              ) : null}
 
+              {screen === 'plan' ? (
+                <>
               <Card>
                 <View style={styles.cardTopline}>
                   <View>
@@ -388,12 +397,16 @@ export default function App() {
                   </View>
                 </View>
                 <View style={styles.factorList}>
-                  {Object.entries(analysis.data.network_asset_counts).map(([asset, count]) => (
-                    <View key={asset} style={styles.factorRow}>
-                      <Text style={styles.factorName}>{asset}</Text>
-                      <Text style={styles.factorScore}>{count.toLocaleString()}</Text>
-                    </View>
-                  ))}
+                  {Object.keys(networkAssetCounts).length ? (
+                    Object.entries(networkAssetCounts).map(([asset, count]) => (
+                      <View key={asset} style={styles.factorRow}>
+                        <Text style={styles.factorName}>{asset}</Text>
+                        <Text style={styles.factorScore}>{count.toLocaleString()}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.weatherMeta}>Network inventory is unavailable for this response.</Text>
+                  )}
                 </View>
                 <Text style={styles.chartFootnote}>
                   Static inventory counts from the supplied GIS data. They provide network context but do not affect the outage-risk score.
@@ -489,14 +502,16 @@ export default function App() {
                   </View>
                 ))}
               </Card>
+                </>
+              ) : null}
 
-              <View style={styles.disclaimer}>
+              {screen === 'outlook' ? <View style={styles.disclaimer}>
                 <Text style={styles.disclaimerTitle}>A transparent demo, not a utility prediction</Text>
                 {analysis.risk.limitations.map((limitation) => (
                   <Text key={limitation} style={styles.disclaimerText}>•  {limitation}</Text>
                 ))}
                 <Text style={styles.disclaimerText}>Location: {locationLabel ?? 'anonymized sample'}. No customer addresses or internal equipment IDs are displayed.</Text>
-              </View>
+              </View> : null}
             </>
           ) : null}
           <View style={styles.bottomSpace} />
@@ -675,6 +690,16 @@ export default function App() {
             </Pressable>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Show restoration plan"
+              accessibilityState={{ selected: screen === 'plan' }}
+              onPress={() => setScreen('plan')}
+              style={[styles.navigationItem, screen === 'plan' && styles.navigationItemSelected]}
+            >
+              <Text style={[styles.navigationIcon, screen === 'plan' && styles.navigationTextSelected]}>✓</Text>
+              <Text style={[styles.navigationLabel, screen === 'plan' && styles.navigationTextSelected]}>Plan</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Show current weather"
               accessibilityState={{ selected: screen === 'weather' }}
               onPress={() => setScreen('weather')}
@@ -701,7 +726,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#FFF8F8' },
-  brandLogo: { width: 52, height: 52, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#F0D8DB' },
+  brandLogo: { width: 44, height: 44, backgroundColor: '#FFFFFF', borderRadius: 11, borderWidth: 1, borderColor: '#F0D8DB' },
   content: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 18, paddingTop: 24, paddingBottom: 24 },
   chatContent: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 18, paddingTop: 22, paddingBottom: 36 },
   chatScreen: { flex: 1 },
@@ -788,15 +813,15 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingTop: 8,
     paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   glassNavigation: {
-    height: 62,
+    height: 58,
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -821,25 +846,26 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
   },
   navigationItem: {
-    minWidth: 96,
-    height: 46,
-    paddingHorizontal: 12,
-    borderRadius: 17,
-    flexDirection: 'row',
+    minWidth: 0,
+    flex: 1,
+    height: 48,
+    paddingHorizontal: 3,
+    borderRadius: 16,
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: 1,
   },
   navigationItemSelected: {
     backgroundColor: 'rgba(255, 255, 255, 0.72)',
   },
-  navigationIcon: { color: '#758184', fontSize: 19, lineHeight: 23 },
-  navigationLabel: { color: '#68777A', fontSize: 11, fontWeight: '700' },
+  navigationIcon: { color: '#758184', fontSize: 17, lineHeight: 20 },
+  navigationLabel: { color: '#68777A', fontSize: 9, fontWeight: '700' },
   navigationTextSelected: { color: '#8E2433' },
   assistantButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#FCE8EA',
     borderWidth: 1,
     borderColor: '#E39AA4',

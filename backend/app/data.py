@@ -24,6 +24,7 @@ class DemoLocation:
     damage_records: int
     asset_types: frozenset[str]
     topology_records: int
+    network_asset_counts: dict[str, int]
     weather_latitude: float
     weather_longitude: float
 
@@ -105,6 +106,35 @@ def _customer_circuit_centers(archive_path: Path) -> dict[str, tuple[float, floa
     }
 
 
+def _network_asset_counts(archive_path: Path) -> dict[str, Counter[str]]:
+    layers = {
+        "secondary lines": "Secondary_ExportFeatures.dbf",
+        "transformers": "Transformer_Clip.dbf",
+        "switches": "Switch_Clip.dbf",
+        "reclosers": "Recloser_Bank_Clip.dbf",
+    }
+    counts: dict[str, Counter[str]] = {}
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            for asset_type, layer_name in layers.items():
+                layer_stem = layer_name.removesuffix(".dbf")
+                reader = shapefile.Reader(
+                    shp=io.BytesIO(archive.read(f"{layer_stem}.shp")),
+                    shx=io.BytesIO(archive.read(f"{layer_stem}.shx")),
+                    dbf=io.BytesIO(archive.read(layer_name)),
+                    encoding="utf-8",
+                )
+                for record in reader.iterRecords(fields=["circuit_id"]):
+                    circuit = _normalize_circuit(record["circuit_id"])
+                    if circuit:
+                        counts.setdefault(circuit, Counter())[asset_type] += 1
+    except (OSError, KeyError, zipfile.BadZipFile, shapefile.ShapefileException) as exc:
+        raise RuntimeError(
+            f"Could not read circuit network inventory from {archive_path.name}: {exc}"
+        ) from exc
+    return counts
+
+
 def _load_labor_reference() -> tuple[float, float, float]:
     path = DATA_DIR / "Install_Labor_HackOHIO.xlsx"
     if not path.is_file():
@@ -131,8 +161,9 @@ def _load_labor_reference() -> tuple[float, float, float]:
 def load_dataset() -> Dataset:
     damage_path = DATA_DIR / "raw" / "Data1.zip"
     customer_path = DATA_DIR / "raw" / "Data1.zip"
+    network_path = DATA_DIR / "raw" / "Data2.zip"
     topology_path = DATA_DIR / "raw" / "matched_upstream.zip"
-    for path in (damage_path, customer_path, topology_path):
+    for path in (damage_path, customer_path, network_path, topology_path):
         if not path.is_file():
             raise FileNotFoundError(
                 f"Required challenge data not found: {path}. "
@@ -167,6 +198,7 @@ def load_dataset() -> Dataset:
         if str(record.get("circuit_id") or "").strip()
     }
     customer_centers = _customer_circuit_centers(customer_path)
+    network_counts = _network_asset_counts(network_path)
     matched_circuits = customer_circuits.intersection(damage_counts, customer_centers)
     if not matched_circuits:
         raise RuntimeError(
@@ -219,6 +251,15 @@ def load_dataset() -> Dataset:
             damage_records=damage_counts[circuit],
             asset_types=frozenset(assets_by_circuit.get(circuit, set())),
             topology_records=topology_counts[circuit],
+            network_asset_counts={
+                asset_type: network_counts.get(circuit, Counter())[asset_type]
+                for asset_type in (
+                    "secondary lines",
+                    "transformers",
+                    "switches",
+                    "reclosers",
+                )
+            },
             weather_latitude=customer_centers[circuit][0],
             weather_longitude=customer_centers[circuit][1],
         )

@@ -14,6 +14,28 @@ class ChallengeDataTests(unittest.TestCase):
 
         self.assertGreaterEqual(len(dataset.locations), 2)
         self.assertTrue(all(location.topology_records > 0 for location in dataset.locations))
+        self.assertTrue(
+            all(
+                set(location.network_asset_counts)
+                == {"secondary lines", "transformers", "switches", "reclosers"}
+                for location in dataset.locations
+            )
+        )
+        self.assertTrue(
+            all(
+                sum(location.network_asset_counts.values()) > 0
+                for location in dataset.locations
+            )
+        )
+        self.assertEqual(
+            next(location for location in dataset.locations if location.id == "location_a").network_asset_counts,
+            {
+                "secondary lines": 691,
+                "transformers": 68,
+                "switches": 9,
+                "reclosers": 0,
+            },
+        )
         self.assertEqual(dataset.indirect_multiplier, 4.5)
         self.assertGreater(dataset.install_hours, 0)
         self.assertGreater(dataset.damage_record_count, 0)

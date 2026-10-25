@@ -26,3 +26,10 @@ unzip -n data/raw/matched_upstream.zip -d data/extracted/matched_upstream
 The `-n` option avoids overwriting existing files. Extracted files are ignored by Git.
 
 Keep each shapefile's `.shp`, `.shx`, `.dbf`, `.prj`, and other companion files together.
+
+The backend reads the supplied ZIP archives directly. It uses `Data1.zip` for
+historical damage and customer-circuit context, `Data2.zip` for static
+secondary-line, transformer, switch, and recloser counts by circuit, and
+`matched_upstream.zip` to validate topology records for sample circuits. The
+Data2 inventory is shown as context in the app; it is not currently a calibrated
+outage predictor or an input to the relative risk score.

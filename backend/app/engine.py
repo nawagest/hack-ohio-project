@@ -128,9 +128,9 @@ def analyze(dataset: Dataset, scenario: Scenario) -> dict:
             "basis": (
                 "Relative prototype index, not a probability. It combines the "
                 "selected simulated storm scenario, historical damage count, and "
-                "recorded asset-type diversity. Customer and upstream topology "
-                "records are used to build and validate sample locations, but are "
-                "not currently inputs to this score."
+                "recorded asset-type diversity. Circuit network inventory and "
+                "upstream topology are displayed as context, but are not currently "
+                "inputs to this score."
             ),
             "factors": [
                 {
@@ -159,6 +159,7 @@ def analyze(dataset: Dataset, scenario: Scenario) -> dict:
             "limitations": [
                 "Live regional NWS weather is shown separately and does not affect this score; storm severity is a demo scenario.",
                 "Historical damage records are not calibrated outage outcomes.",
+                "Circuit network inventory is contextual only and is not calibrated as an outage predictor.",
                 "No customer-specific outage or restoration status is available.",
             ],
         },
@@ -203,6 +204,7 @@ def analyze(dataset: Dataset, scenario: Scenario) -> dict:
             "historical_damage_evidence": history_summary,
             "historical_damage_records_in_package": dataset.damage_record_count,
             "upstream_topology_records_in_package": dataset.topology_record_count,
+            "network_asset_counts": location.network_asset_counts,
         },
     }
 

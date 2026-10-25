@@ -77,6 +77,9 @@ type Analysis = {
   alert: { eligible: boolean; rule: string; message: string; delivery: string };
   preparation: string[];
   chart: ChartPoint[];
+  data: {
+    network_asset_counts: Record<string, number>;
+  };
   weather: Weather;
 };
 type ChatMessage = {
@@ -463,6 +466,26 @@ export default function App() {
                     </View>
                   ))}
                 </View>
+              </Card>
+
+              <Card>
+                <View style={styles.cardTopline}>
+                  <View>
+                    <Text style={styles.sectionLabel}>CIRCUIT NETWORK CONTEXT</Text>
+                    <Text style={styles.cardTitle}>Equipment in this sample area</Text>
+                  </View>
+                </View>
+                <View style={styles.factorList}>
+                  {Object.entries(analysis.data.network_asset_counts).map(([asset, count]) => (
+                    <View key={asset} style={styles.factorRow}>
+                      <Text style={styles.factorName}>{asset}</Text>
+                      <Text style={styles.factorScore}>{count.toLocaleString()}</Text>
+                    </View>
+                  ))}
+                </View>
+                <Text style={styles.chartFootnote}>
+                  Static inventory counts from the supplied GIS data. They provide network context but do not affect the outage-risk score.
+                </Text>
               </Card>
 
               <Card>

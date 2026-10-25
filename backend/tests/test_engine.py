@@ -7,13 +7,23 @@ from backend.app.engine import Scenario, analyze, deterministic_answer, restorat
 def sample_dataset() -> Dataset:
     return Dataset(
         locations=(
-            DemoLocation("location_a", "internal-circuit-a", 2, frozenset({"pole"}), 10, 37.3, -80.0),
+            DemoLocation(
+                "location_a",
+                "internal-circuit-a",
+                2,
+                frozenset({"pole"}),
+                10,
+                {"secondary lines": 5, "transformers": 2, "switches": 1, "reclosers": 0},
+                37.3,
+                -80.0,
+            ),
             DemoLocation(
                 "location_b",
                 "internal-circuit-b",
                 8,
                 frozenset({"pole", "primary", "fuse"}),
                 50,
+                {"secondary lines": 10, "transformers": 3, "switches": 2, "reclosers": 1},
                 37.2,
                 -80.0,
             ),
@@ -44,6 +54,11 @@ class AnalysisTests(unittest.TestCase):
             sum(factor["contribution"] for factor in low["risk"]["factors"]),
             low["risk"]["index"],
         )
+        self.assertEqual(
+            low["data"]["network_asset_counts"],
+            dataset.locations[0].network_asset_counts,
+        )
+        self.assertIn("not currently inputs", low["risk"]["basis"])
 
     def test_restoration_range_grows_with_damage_and_has_valid_bounds(self) -> None:
         dataset = sample_dataset()

@@ -7,6 +7,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -304,15 +305,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
     <SafeAreaView style={styles.root}>
-      <StatusBar style="light" />
-      <View style={styles.topBar}>
-        <View style={styles.brandMark}><Text style={styles.brandBolt}>↯</Text></View>
-        <View style={styles.brandTextWrap}>
-          <Text style={styles.brand}>OUTAGE CONCIERGE</Text>
-          <Text style={styles.brandSub}>A storm planning companion</Text>
-        </View>
-        <View style={styles.demoBadge}><Text style={styles.demoBadgeText}>DEMO</Text></View>
-      </View>
+      <StatusBar style="dark" />
 
       {screen === 'overview' ? (
         <ScrollView
@@ -645,6 +638,12 @@ export default function App() {
 
       {screen === 'overview' ? (
         <View style={styles.assistantFooter}>
+          <Image
+            accessibilityLabel="Kodjo and CO logo"
+            source={require('./assets/13A8F8DF-C72E-48D0-8B22-35582FB8A2AE.jpeg')}
+            resizeMode="contain"
+            style={styles.brandLogo}
+          />
           <BlurView intensity={75} tint="light" style={styles.glassNavigation}>
             <View pointerEvents="none" style={styles.glassHighlight} />
             <Pressable
@@ -685,28 +684,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#FFF8F8' },
-  topBar: {
-    backgroundColor: '#FCEAEC',
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    paddingBottom: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  brandMark: {
-    width: 38,
-    height: 38,
-    borderRadius: 13,
-    backgroundColor: '#FCE4E6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandBolt: { color: '#A51D32', fontSize: 24, fontWeight: '700' },
-  brandTextWrap: { marginLeft: 11, flex: 1 },
-  brand: { color: '#55212A', fontSize: 11, letterSpacing: 1.5, fontWeight: '800' },
-  brandSub: { color: '#8D5A62', fontSize: 12, marginTop: 3 },
-  demoBadge: { borderRadius: 20, borderWidth: 1, borderColor: '#DEAAB1', paddingHorizontal: 9, paddingVertical: 5 },
-  demoBadgeText: { color: '#8E3543', fontSize: 9, letterSpacing: 1, fontWeight: '700' },
+  brandLogo: { width: 52, height: 52, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#F0D8DB' },
   content: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 18, paddingTop: 24, paddingBottom: 24 },
   chatContent: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 18, paddingTop: 22, paddingBottom: 36 },
   chatScreen: { flex: 1 },
@@ -793,12 +771,12 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 560,
     alignSelf: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   glassNavigation: {
     height: 62,
@@ -842,19 +820,21 @@ const styles = StyleSheet.create({
   navigationLabel: { color: '#68777A', fontSize: 11, fontWeight: '700' },
   navigationTextSelected: { color: '#8E2433' },
   assistantButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#B42338',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FCE8EA',
+    borderWidth: 1,
+    borderColor: '#E39AA4',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#691322',
-    shadowOpacity: 0.24,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: '#8E2433',
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
     elevation: 6,
   },
-  assistantButtonIcon: { color: '#FFFFFF', fontSize: 15, letterSpacing: 0.6, fontWeight: '800' },
+  assistantButtonIcon: { color: '#951D30', fontSize: 15, letterSpacing: 0.6, fontWeight: '800' },
   backButton: { alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 11, marginLeft: -8, marginBottom: 18 },
   backText: { color: '#A51D32', fontSize: 10, letterSpacing: 1, fontWeight: '800' },
   quickPrompts: { gap: 8, marginBottom: 19 },

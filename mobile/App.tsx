@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -182,8 +185,22 @@ export default function App() {
     },
   ]);
   const overviewScrollRef = useRef<ScrollViewInstance | null>(null);
+  const chatScrollRef = useRef<ScrollViewInstance | null>(null);
   const [weatherOffset, setWeatherOffset] = useState(0);
   const [activeNavigation, setActiveNavigation] = useState<'outlook' | 'weather'>('outlook');
+
+  useEffect(() => {
+    const keyboardSubscription = Keyboard.addListener('keyboardDidShow', () => {
+      requestAnimationFrame(() => chatScrollRef.current?.scrollToEnd({ animated: true }));
+    });
+    return () => keyboardSubscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (screen === 'assistant') {
+      requestAnimationFrame(() => chatScrollRef.current?.scrollToEnd({ animated: true }));
+    }
+  }, [messages, screen]);
 
   useEffect(() => {
     let active = true;
@@ -557,60 +574,73 @@ export default function App() {
           <View style={styles.bottomSpace} />
         </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={styles.chatContent} keyboardShouldPersistTaps="handled">
-          <Pressable accessibilityRole="button" onPress={() => setScreen('overview')} style={styles.backButton}>
-            <Text style={styles.backText}>‹  BACK TO OUTLOOK</Text>
-          </Pressable>
-          <Text style={styles.eyebrow}>YOUR GUIDE</Text>
-          <Text style={styles.heading}>Ask the assistant</Text>
-          <Text style={styles.subtitle}>Answers use this scenario’s calculated results and assumptions.</Text>
-          <View style={styles.quickPrompts}>
-            {['Why is this risk elevated?', 'Compare repair scenarios with a graph', 'How can I prepare?'].map((prompt) => (
-              <Pressable key={prompt} accessibilityRole="button" onPress={() => sendQuestion(prompt)} style={styles.quickPrompt}>
-                <Text style={styles.quickPromptText}>{prompt}</Text>
-              </Pressable>
-            ))}
-          </View>
-          {messages.map((message) => (
-            <View
-              key={message.id}
-              style={[styles.message, message.role === 'user' ? styles.userMessage : styles.assistantMessage]}
-            >
-              <Text style={styles.messageRole}>{message.role === 'user' ? 'YOU' : 'CONCIERGE'}</Text>
-              <Text style={styles.messageText}>{message.text}</Text>
-              {message.visualization ? (
-                <View style={styles.chatChart}>
-                  <Text style={styles.sectionLabel}>RESTORATION SCENARIO COMPARISON</Text>
-                  <ScenarioChart points={message.visualization} />
-                </View>
-              ) : null}
-            </View>
-          ))}
-          {sending ? <ActivityIndicator style={styles.sending} color="#148477" /> : null}
-          <View style={styles.composer}>
-            <TextInput
-              accessibilityLabel="Ask a question"
-              value={question}
-              onChangeText={setQuestion}
-              onSubmitEditing={() => sendQuestion()}
-              placeholder="Ask about risk, timing, or prep…"
-              placeholderTextColor="#8A98A2"
-              returnKeyType="send"
-              maxLength={500}
-              style={styles.input}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Send question"
-              disabled={!question.trim() || sending}
-              onPress={() => sendQuestion()}
-              style={[styles.sendButton, (!question.trim() || sending) && styles.sendDisabled]}
-            >
-              <Text style={styles.sendText}>↑</Text>
+        <KeyboardAvoidingView
+          style={styles.chatScreen}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
+        >
+          <ScrollView
+            ref={chatScrollRef}
+            style={styles.chatScroll}
+            contentContainerStyle={styles.chatContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Pressable accessibilityRole="button" onPress={() => setScreen('overview')} style={styles.backButton}>
+              <Text style={styles.backText}>‹  BACK TO OUTLOOK</Text>
             </Pressable>
+            <Text style={styles.eyebrow}>YOUR GUIDE</Text>
+            <Text style={styles.heading}>Ask the assistant</Text>
+            <Text style={styles.subtitle}>Answers use this scenario’s calculated results and assumptions.</Text>
+            <View style={styles.quickPrompts}>
+              {['Why is this risk elevated?', 'Compare repair scenarios with a graph', 'How can I prepare?'].map((prompt) => (
+                <Pressable key={prompt} accessibilityRole="button" onPress={() => sendQuestion(prompt)} style={styles.quickPrompt}>
+                  <Text style={styles.quickPromptText}>{prompt}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {messages.map((message) => (
+              <View
+                key={message.id}
+                style={[styles.message, message.role === 'user' ? styles.userMessage : styles.assistantMessage]}
+              >
+                <Text style={styles.messageRole}>{message.role === 'user' ? 'YOU' : 'CONCIERGE'}</Text>
+                <Text style={styles.messageText}>{message.text}</Text>
+                {message.visualization ? (
+                  <View style={styles.chatChart}>
+                    <Text style={styles.sectionLabel}>RESTORATION SCENARIO COMPARISON</Text>
+                    <ScenarioChart points={message.visualization} />
+                  </View>
+                ) : null}
+              </View>
+            ))}
+            {sending ? <ActivityIndicator style={styles.sending} color="#A51D32" /> : null}
+          </ScrollView>
+          <View style={styles.composerFooter}>
+            <View style={styles.composer}>
+              <TextInput
+                accessibilityLabel="Ask a question"
+                value={question}
+                onChangeText={setQuestion}
+                onSubmitEditing={() => sendQuestion()}
+                placeholder="Ask about risk, timing, or prep…"
+                placeholderTextColor="#8A98A2"
+                returnKeyType="send"
+                maxLength={500}
+                style={styles.input}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Send question"
+                disabled={!question.trim() || sending}
+                onPress={() => sendQuestion()}
+                style={[styles.sendButton, (!question.trim() || sending) && styles.sendDisabled]}
+              >
+                <Text style={[styles.sendText, (!question.trim() || sending) && styles.sendTextDisabled]}>↑</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.chatPrivacy}>Please don’t enter names, addresses, or account information.</Text>
           </View>
-          <Text style={styles.chatPrivacy}>Please don’t enter names, addresses, or account information.</Text>
-        </ScrollView>
+        </KeyboardAvoidingView>
       )}
 
       {screen === 'overview' ? (
@@ -679,6 +709,8 @@ const styles = StyleSheet.create({
   demoBadgeText: { color: '#8E3543', fontSize: 9, letterSpacing: 1, fontWeight: '700' },
   content: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 18, paddingTop: 24, paddingBottom: 24 },
   chatContent: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 18, paddingTop: 22, paddingBottom: 36 },
+  chatScreen: { flex: 1 },
+  chatScroll: { flex: 1 },
   eyebrow: { color: '#B42338', fontSize: 10, fontWeight: '800', letterSpacing: 1.7, marginBottom: 7 },
   heading: { color: '#18353E', fontSize: 28, letterSpacing: -0.7, fontWeight: '700' },
   subtitle: { color: '#61747A', fontSize: 14, lineHeight: 20, marginTop: 7, marginBottom: 18 },
@@ -835,10 +867,12 @@ const styles = StyleSheet.create({
   messageText: { color: '#354D52', fontSize: 13, lineHeight: 19 },
   chatChart: { marginTop: 14, borderTopWidth: 1, borderTopColor: '#E7ECEA', paddingTop: 12 },
   sending: { alignSelf: 'flex-start', marginVertical: 12 },
-  composer: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 8 },
-  input: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DFE8E4', borderRadius: 15, paddingHorizontal: 14, paddingVertical: 12, color: '#27434A', fontSize: 13 },
-  sendButton: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#D98690' },
-  sendDisabled: { backgroundColor: '#9DADA8' },
+  composerFooter: { width: '100%', maxWidth: 560, alignSelf: 'center', paddingHorizontal: 18, paddingTop: 8, paddingBottom: 8, backgroundColor: '#FFF8F8', borderTopWidth: 1, borderTopColor: '#F1E3E4' },
+  composer: { flexDirection: 'row', alignItems: 'center', gap: 9, padding: 5, borderRadius: 19, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EADBDD' },
+  input: { flex: 1, backgroundColor: 'transparent', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, color: '#55212A', fontSize: 13 },
+  sendButton: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#B42338', borderWidth: 1, borderColor: '#A51D32' },
+  sendDisabled: { backgroundColor: '#F8E8EA', borderColor: '#EFD5D8' },
   sendText: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', lineHeight: 25 },
-  chatPrivacy: { color: '#849292', fontSize: 9, lineHeight: 14, marginTop: 9, textAlign: 'center' },
+  sendTextDisabled: { color: '#B27A81' },
+  chatPrivacy: { color: '#849292', fontSize: 9, lineHeight: 14, marginTop: 6, textAlign: 'center' },
 });

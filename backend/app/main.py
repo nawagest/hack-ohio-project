@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
 from .data import Dataset, load_dataset
-from .engine import Scenario, analyze, deterministic_answer
+from .engine import Scenario, analyze, deterministic_answer, greeting_response
 
 
 app = FastAPI(
@@ -93,6 +93,11 @@ def _ollama_answer(question: str, result: dict) -> str:
                     "role": "system",
                     "content": (
                         "You are a plain-language outage preparation assistant. "
+                        "Answer only what the customer asked, using short, clear "
+                        "sentences and familiar words. Keep answers concise but include "
+                        "the key fact, reason, and limitation when relevant. Do not "
+                        "repeat the full scenario or add unrelated advice. Respond "
+                        "naturally to greetings and ask what they would like to know. "
                         "Only explain the supplied calculated results and assumptions. "
                         "Never invent outage probabilities, utility confirmations, "
                         "customer identities, or restoration promises. State that the "
@@ -188,6 +193,10 @@ def analyze_request(request: AnalysisRequest) -> dict:
 
 @app.post("/api/assistant")
 def assistant(request: AssistantRequest) -> dict:
+    greeting = greeting_response(request.question)
+    if greeting:
+        return {"answer": greeting, "visualization": None}
+
     dataset = _dataset()
     try:
         result = analyze(dataset, _scenario(request))

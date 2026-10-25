@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -32,6 +33,18 @@ def _hours_label(hours: float) -> float:
     return round(hours * 2) / 2
 
 
+def greeting_response(question: str) -> str | None:
+    normalized = re.sub(r"[^\w\s]", " ", question.casefold())
+    normalized = " ".join(normalized.split())
+    if re.fullmatch(
+        r"(?:hi|hello|hey|good morning|good afternoon|good evening)"
+        r"(?: there)?(?: how are you)?",
+        normalized,
+    ):
+        return "Hi! What would you like to know about the selected area: outage risk, restoration time, preparation, or alerts?"
+    return None
+
+
 def _estimate_for_count(
     dataset: Dataset, repair_count: int, crew_size: int, availability: float, delay: float
 ) -> float:
@@ -62,6 +75,13 @@ def analyze(dataset: Dataset, scenario: Scenario) -> dict:
     storm_score = STORM_SCORES[scenario.storm_severity]
     historical_score = min(float(location.damage_records), 5.0)
     asset_score = min(float(len(location.asset_types)), 5.0)
+    if location.damage_records <= 1:
+        history_summary = "limited"
+    elif location.damage_records <= 5:
+        history_summary = "some"
+    else:
+        history_summary = "multiple"
+
     available_factors = [
         (30, storm_score),
         (25, historical_score),
@@ -73,6 +93,11 @@ def analyze(dataset: Dataset, scenario: Scenario) -> dict:
         / sum(weight for weight, _ in available_factors)
         * 100
     )
+    factor_contributions = [
+        round(weight * score / 5 / sum(item[0] for item in available_factors) * 100)
+        for weight, score in available_factors
+    ]
+    factor_contributions[-1] += risk_index - sum(factor_contributions)
     if risk_index >= 60:
         risk_band = "Higher"
     elif risk_index >= 30:
@@ -94,13 +119,6 @@ def analyze(dataset: Dataset, scenario: Scenario) -> dict:
         dataset, scenario.repair_count, scenario.crew_size, 0.5, 2
     )
 
-    if location.damage_records <= 1:
-        history_summary = "limited"
-    elif location.damage_records <= 5:
-        history_summary = "some"
-    else:
-        history_summary = "multiple"
-
     return {
         "location": {"id": location.id, "label": location.label},
         "risk": {
@@ -109,18 +127,19 @@ def analyze(dataset: Dataset, scenario: Scenario) -> dict:
             "confidence": "Limited",
             "basis": (
                 "Relative prototype index, not a probability. It combines the "
-                "selected simulated storm scenario with historical damage records "
-                "and asset diversity for an anonymized circuit linked to customer "
-                "and upstream network records."
+                "selected simulated storm scenario, historical damage count, and "
+                "recorded asset-type diversity. Customer and upstream topology "
+                "records are used to build and validate sample locations, but are "
+                "not currently inputs to this score."
             ),
             "factors": [
                 {
                     "label": STORM_LABELS[scenario.storm_severity],
-                    "contribution": round(30 * storm_score / 5),
+                    "contribution": factor_contributions[0],
                 },
                 {
                     "label": f"{history_summary.capitalize()} historical damage records",
-                    "contribution": round(25 * historical_score / 5),
+                    "contribution": factor_contributions[1],
                 },
                 *(
                     [
@@ -130,7 +149,7 @@ def analyze(dataset: Dataset, scenario: Scenario) -> dict:
                                 if len(location.asset_types) > 1
                                 else "Historical damage on one asset type"
                             ),
-                            "contribution": round(15 * asset_score / 5),
+                            "contribution": factor_contributions[2],
                         }
                     ]
                     if asset_score
@@ -189,36 +208,65 @@ def analyze(dataset: Dataset, scenario: Scenario) -> dict:
 
 
 def deterministic_answer(question: str, result: dict) -> str:
-    normalized = question.casefold()
+    greeting = greeting_response(question)
+    if greeting:
+        return greeting
+
+    normalized = re.sub(r"[^\w\s]", " ", question.casefold())
+    normalized = f" { ' '.join(normalized.split()) } "
+
+    def asks_about(*phrases: str) -> bool:
+        return any(f" {phrase} " in normalized for phrase in phrases)
+
     risk = result["risk"]
     restoration = result["restoration"]
-    if any(word in normalized for word in ("prepare", "ready", "safety", "safe")):
-        return " ".join(result["preparation"]) + " Never approach downed wires; contact emergency services if there is immediate danger."
-    if any(word in normalized for word in ("alert", "notify", "notification")):
+    if asks_about("prepare", "preparation", "ready", "safety", "safe"):
         return (
-            f"{result['alert']['rule']} "
-            f"{'This sample qualifies under that demo rule.' if result['alert']['eligible'] else 'This sample does not qualify under that demo rule.'} "
-            f"{result['alert']['delivery']}"
+            "Charge phones and essential battery-powered devices, keep a flashlight "
+            "and batteries nearby, and follow official utility updates. Stay away "
+            "from downed wires."
         )
-    if any(word in normalized for word in ("restore", "how long", "time", "repair")):
+    if asks_about("chart", "graph", "plot", "compare"):
+        return (
+            "The chart compares estimated restoration time for one to four pole "
+            "repairs. More assumed repairs increase the estimate; these are planning "
+            "scenarios, not confirmed restoration times."
+        )
+    if asks_about("alert", "alerts", "notify", "notification", "notifications"):
+        return (
+            f"This sample {'meets' if result['alert']['eligible'] else 'does not meet'} "
+            "the demo alert rule because its relative risk is "
+            f"{risk['band'].lower()}. No alert is sent by this prototype."
+        )
+    if asks_about("why") and asks_about("restore", "restoration", "repair", "time"):
+        return (
+            f"The estimate uses about {restoration['install_hours_per_pole']} install "
+            f"hours and {restoration['removal_hours_per_pole']} removal hours per "
+            f"pole, then applies the supplied {restoration['indirect_multiplier']} "
+            "factor for travel, setup, and safety time. It adjusts for the assumed "
+            f"{restoration['crew_size']}-person crew and work delays. These are "
+            "planning assumptions, not confirmed crew or utility information."
+        )
+    if asks_about("restore", "restoration", "how long", "time", "repair", "repairs"):
         bounds = restoration["range_hours"]
         repair_word = "repair" if restoration["repair_count"] == 1 else "repairs"
         return (
-            f"For this simulated scenario, the planning range is about {bounds['low']}–"
-            f"{bounds['high']} hours, with a central estimate near {bounds['central']} hours. "
-            f"This assumes {restoration['repair_count']} pole {repair_word}, a {restoration['crew_size']}-person "
-            "crew, workbook labor averages, and the 4.5 indirect-labor multiplier. "
-            "It is not a confirmed utility estimate."
+            f"For this scenario, plan for about {bounds['low']}–{bounds['high']} hours "
+            f"(middle estimate: {bounds['central']} hours). This assumes "
+            f"{restoration['repair_count']} pole {repair_word} and a "
+            f"{restoration['crew_size']}-person crew. It is not a confirmed utility estimate."
         )
-    if any(word in normalized for word in ("risk", "why", "outage", "storm")):
-        factors = ", ".join(item["label"].lower() for item in risk["factors"])
+    if asks_about("risk", "outage", "storm", "why"):
+        factors = ", ".join(
+            f"{item['label'].lower()} (+{item['contribution']})"
+            for item in risk["factors"]
+        )
         return (
-            f"The relative risk index is {risk['index']}/100 ({risk['band']}), based on {factors}. "
-            f"It is not a probability: {risk['basis']}"
+            f"The relative outage-risk score is {risk['index']}/100 ({risk['band']}). "
+            f"Its factors are {factors}. This is a limited-confidence scenario "
+            "score, not the chance that your power will go out."
         )
     return (
-        f"For {result['location']['label']}, the relative outage-risk index is "
-        f"{risk['index']}/100 ({risk['band']}) and the simulated restoration planning range is "
-        f"{restoration['range_hours']['low']}–{restoration['range_hours']['high']} hours. "
-        "Ask me about the risk factors, restoration assumptions, alerts, or preparation steps."
+        "I can help with outage risk, restoration time, storm preparation, or alerts "
+        "for the selected sample area. Which would you like to know about?"
     )

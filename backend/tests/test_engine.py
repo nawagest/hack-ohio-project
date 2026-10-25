@@ -33,9 +33,14 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(low["risk"]["band"], "Lower")
         self.assertGreater(high["risk"]["index"], low["risk"]["index"])
         self.assertIn("not a probability", low["risk"]["basis"])
+        self.assertIn("not currently inputs", low["risk"]["basis"])
         self.assertEqual(
             low["risk"]["factors"][2]["label"],
             "Historical damage on one asset type",
+        )
+        self.assertEqual(
+            sum(factor["contribution"] for factor in low["risk"]["factors"]),
+            low["risk"]["index"],
         )
 
     def test_restoration_range_grows_with_damage_and_has_valid_bounds(self) -> None:
@@ -64,6 +69,33 @@ class AnalysisTests(unittest.TestCase):
         answer = deterministic_answer("How long could repairs take?", result)
 
         self.assertIn("not a confirmed utility estimate", answer)
+
+    def test_assistant_responds_naturally_to_greetings(self) -> None:
+        result = analyze(sample_dataset(), Scenario("location_a", "moderate", 1, 2))
+
+        answer = deterministic_answer("Hello!", result)
+
+        self.assertTrue(answer.startswith("Hi!"))
+        self.assertIn("outage risk", answer)
+        self.assertNotIn("/100", answer)
+
+    def test_unrelated_question_gets_a_concise_prompt_for_direction(self) -> None:
+        result = analyze(sample_dataset(), Scenario("location_a", "moderate", 1, 2))
+
+        answer = deterministic_answer("What is your favorite color?", result)
+
+        self.assertLess(len(answer), 150)
+        self.assertNotIn("/100", answer)
+        self.assertIn("Which would you like", answer)
+
+    def test_risk_explanation_shows_normalized_factor_points(self) -> None:
+        result = analyze(sample_dataset(), Scenario("location_a", "moderate", 1, 2))
+
+        answer = deterministic_answer("Why is this risk elevated?", result)
+
+        self.assertIn(f"{result['risk']['index']}/100", answer)
+        for factor in result["risk"]["factors"]:
+            self.assertIn(f"+{factor['contribution']}", answer)
 
 
 if __name__ == "__main__":

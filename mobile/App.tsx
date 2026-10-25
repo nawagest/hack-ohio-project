@@ -178,7 +178,7 @@ export default function App() {
   const [locationsLoading, setLocationsLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [screen, setScreen] = useState<'overview' | 'assistant'>('overview');
+  const [screen, setScreen] = useState<'outlook' | 'weather' | 'assistant'>('outlook');
   const [question, setQuestion] = useState('');
   const [sending, setSending] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -188,10 +188,7 @@ export default function App() {
       text: 'Hi! I can explain this demo risk estimate, compare repair scenarios, or suggest storm preparations.',
     },
   ]);
-  const overviewScrollRef = useRef<ScrollViewInstance | null>(null);
   const chatScrollRef = useRef<ScrollViewInstance | null>(null);
-  const [weatherOffset, setWeatherOffset] = useState(0);
-  const [activeNavigation, setActiveNavigation] = useState<'outlook' | 'weather'>('outlook');
 
   useEffect(() => {
     const keyboardSubscription = Keyboard.addListener('keyboardDidShow', () => {
@@ -295,14 +292,6 @@ export default function App() {
     }
   }
 
-  function navigateOverview(section: 'outlook' | 'weather') {
-    setActiveNavigation(section);
-    overviewScrollRef.current?.scrollTo({
-      y: section === 'weather' ? weatherOffset : 0,
-      animated: true,
-    });
-  }
-
   const locationLabel = locations.find((location) => location.id === locationId)?.label;
 
   return (
@@ -310,17 +299,10 @@ export default function App() {
     <SafeAreaView style={styles.root}>
       <StatusBar style="dark" />
 
-      {screen === 'overview' ? (
+      {screen === 'outlook' ? (
         <ScrollView
-          ref={overviewScrollRef}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
-          onScroll={(event) => {
-            if (weatherOffset > 0) {
-              setActiveNavigation(event.nativeEvent.contentOffset.y >= weatherOffset - 80 ? 'weather' : 'outlook');
-            }
-          }}
-          scrollEventThrottle={16}
         >
           <Text style={styles.eyebrow}>PLAN AHEAD</Text>
           <Text style={styles.heading}>Your storm outlook</Text>
@@ -354,76 +336,6 @@ export default function App() {
               ))}
             </View>
           </Card>
-
-          {analysis?.weather ? (
-            <View onLayout={(event) => setWeatherOffset(event.nativeEvent.layout.y)}>
-            <Card style={analysis.weather.status !== 'available' ? styles.weatherUnavailable : undefined}>
-              <View style={styles.cardTopline}>
-                <View>
-                  <Text style={styles.sectionLabel}>CURRENT WEATHER</Text>
-                  <Text style={styles.cardTitle}>{analysis.weather.source}</Text>
-                </View>
-                <Text style={styles.weatherFreshness}>
-                  {analysis.weather.status !== 'available' ? 'OFFLINE' : analysis.weather.current_stale ? 'DELAYED' : analysis.weather.stale ? 'CACHED' : 'LIVE'}
-                </Text>
-              </View>
-              <Text style={styles.weatherMeta}>Sample GIS circuits are in southwest Virginia; weather uses rounded circuit centers, not customer addresses.</Text>
-
-              {analysis.weather.current ? (
-                <View style={styles.weatherCurrent}>
-                  <Text style={styles.weatherTemperature}>
-                    {analysis.weather.current.temperature_f === null ? '—' : `${analysis.weather.current.temperature_f}°`}
-                  </Text>
-                  <View style={styles.weatherCurrentDetails}>
-                    <Text style={styles.weatherDescription}>{analysis.weather.current.description}</Text>
-                    {analysis.weather.current.wind_mph !== null ? (
-                      <Text style={styles.weatherMeta}>
-                        Wind {analysis.weather.current.wind_mph} mph{analysis.weather.current.wind_direction ? ` ${analysis.weather.current.wind_direction}` : ''}
-                      </Text>
-                    ) : null}
-                    <Text style={styles.weatherMeta}>Observed {formatTimestamp(analysis.weather.current.observed_at)}</Text>
-                  </View>
-                </View>
-              ) : null}
-
-              {analysis.weather.forecast ? (
-                <View style={styles.weatherForecast}>
-                  <Text style={styles.sectionLabel}>{analysis.weather.forecast.period ?? 'NEXT FORECAST'}</Text>
-                  <Text style={styles.bodyText}>
-                    {analysis.weather.forecast.short_forecast ?? 'Forecast details unavailable'}
-                    {analysis.weather.forecast.temperature_f !== null ? `, ${analysis.weather.forecast.temperature_f}°F` : ''}
-                    {analysis.weather.forecast.precipitation_probability !== null ? `, ${analysis.weather.forecast.precipitation_probability}% chance of precipitation` : ''}
-                  </Text>
-                </View>
-              ) : null}
-
-              <View style={styles.weatherAlerts}>
-                <Text style={styles.sectionLabel}>OFFICIAL WEATHER ALERTS</Text>
-                {analysis.weather.status !== 'available' ? (
-                  <Text style={styles.weatherMeta}>{analysis.weather.message ?? 'Live weather is temporarily unavailable.'}</Text>
-                ) : analysis.weather.alerts.length ? (
-                  analysis.weather.alerts.map((alert, index) => (
-                    <View key={`${alert.event ?? 'alert'}-${index}`} style={styles.weatherAlert}>
-                      <Text style={styles.weatherDescription}>{alert.event ?? 'Weather alert'}</Text>
-                      {alert.headline ? <Text style={styles.weatherMeta}>{alert.headline}</Text> : null}
-                      {alert.severity ? <Text style={styles.weatherMeta}>Severity: {alert.severity}</Text> : null}
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.weatherMeta}>No active NWS alerts for this sample area.</Text>
-                )}
-              </View>
-
-              {analysis.weather.status === 'available' ? (
-                <Text style={styles.chartFootnote}>
-                  {analysis.weather.stale ? 'Cached data. ' : ''}
-                  {analysis.weather.current_stale ? 'Latest station observation is over 90 minutes old. ' : ''}
-                  Updated {formatTimestamp(analysis.weather.fetched_at)}. Weather is regional context and does not change the outage-risk score.
-                </Text>
-              ) : null}
-            </Card>
-            </View>
-          ) : null}
 
           {error ? (
             <Card style={styles.errorCard}>
@@ -589,6 +501,88 @@ export default function App() {
           ) : null}
           <View style={styles.bottomSpace} />
         </ScrollView>
+      ) : screen === 'weather' ? (
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Text style={styles.eyebrow}>WEATHER</Text>
+          <Text style={styles.heading}>Current conditions</Text>
+          <Text style={styles.subtitle}>{locationLabel ?? 'Selected sample area'} · National Weather Service</Text>
+
+          {analysis?.weather ? (
+            <Card style={analysis.weather.status !== 'available' ? styles.weatherUnavailable : undefined}>
+              <View style={styles.cardTopline}>
+                <Text style={styles.sectionLabel}>REGIONAL CONDITIONS</Text>
+                <Text style={styles.weatherFreshness}>
+                  {analysis.weather.status !== 'available' ? 'OFFLINE' : analysis.weather.current_stale ? 'DELAYED' : analysis.weather.stale ? 'CACHED' : 'LIVE'}
+                </Text>
+              </View>
+              <Text style={styles.weatherMeta}>Sample GIS circuits are in southwest Virginia; weather uses rounded circuit centers, not customer addresses.</Text>
+
+              {analysis.weather.current ? (
+                <View style={styles.weatherCurrent}>
+                  <Text style={styles.weatherTemperature}>
+                    {analysis.weather.current.temperature_f === null ? '—' : `${analysis.weather.current.temperature_f}°`}
+                  </Text>
+                  <View style={styles.weatherCurrentDetails}>
+                    <Text style={styles.weatherDescription}>{analysis.weather.current.description}</Text>
+                    {analysis.weather.current.wind_mph !== null ? (
+                      <Text style={styles.weatherMeta}>
+                        Wind {analysis.weather.current.wind_mph} mph{analysis.weather.current.wind_direction ? ` ${analysis.weather.current.wind_direction}` : ''}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.weatherMeta}>Observed {formatTimestamp(analysis.weather.current.observed_at)}</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {analysis.weather.forecast ? (
+                <View style={styles.weatherForecast}>
+                  <Text style={styles.sectionLabel}>{analysis.weather.forecast.period ?? 'NEXT FORECAST'}</Text>
+                  <Text style={styles.bodyText}>
+                    {analysis.weather.forecast.short_forecast ?? 'Forecast details unavailable'}
+                    {analysis.weather.forecast.temperature_f !== null ? `, ${analysis.weather.forecast.temperature_f}°F` : ''}
+                    {analysis.weather.forecast.precipitation_probability !== null ? `, ${analysis.weather.forecast.precipitation_probability}% chance of precipitation` : ''}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.weatherAlerts}>
+                <Text style={styles.sectionLabel}>OFFICIAL WEATHER ALERTS</Text>
+                {analysis.weather.status !== 'available' ? (
+                  <Text style={styles.weatherMeta}>{analysis.weather.message ?? 'Live weather is temporarily unavailable.'}</Text>
+                ) : analysis.weather.alerts.length ? (
+                  analysis.weather.alerts.map((alert, index) => (
+                    <View key={`${alert.event ?? 'alert'}-${index}`} style={styles.weatherAlert}>
+                      <Text style={styles.weatherDescription}>{alert.event ?? 'Weather alert'}</Text>
+                      {alert.headline ? <Text style={styles.weatherMeta}>{alert.headline}</Text> : null}
+                      {alert.severity ? <Text style={styles.weatherMeta}>Severity: {alert.severity}</Text> : null}
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.weatherMeta}>No active NWS alerts for this sample area.</Text>
+                )}
+              </View>
+
+              {analysis.weather.status === 'available' ? (
+                <Text style={styles.chartFootnote}>
+                  {analysis.weather.stale ? 'Cached data. ' : ''}
+                  {analysis.weather.current_stale ? 'Latest station observation is over 90 minutes old. ' : ''}
+                  Updated {formatTimestamp(analysis.weather.fetched_at)}.
+                </Text>
+              ) : null}
+            </Card>
+          ) : error ? (
+            <Card style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Weather is unavailable</Text>
+              <Text style={styles.errorText}>{error}</Text>
+            </Card>
+          ) : (
+            <Card style={styles.loadingCard}>
+              <ActivityIndicator color="#B42338" />
+              <Text style={styles.helperText}>Loading regional weather…</Text>
+            </Card>
+          )}
+          <View style={styles.bottomSpace} />
+        </ScrollView>
       ) : (
         <KeyboardAvoidingView
           style={styles.chatScreen}
@@ -601,7 +595,7 @@ export default function App() {
             contentContainerStyle={styles.chatContent}
             keyboardShouldPersistTaps="handled"
           >
-            <Pressable accessibilityRole="button" onPress={() => setScreen('overview')} style={styles.backButton}>
+            <Pressable accessibilityRole="button" onPress={() => setScreen('outlook')} style={styles.backButton}>
               <Text style={styles.backText}>‹  BACK TO OUTLOOK</Text>
             </Pressable>
             <Text style={styles.eyebrow}>YOUR GUIDE</Text>
@@ -659,7 +653,7 @@ export default function App() {
         </KeyboardAvoidingView>
       )}
 
-      {screen === 'overview' ? (
+      {screen !== 'assistant' ? (
         <View style={styles.assistantFooter}>
           <Image
             accessibilityLabel="Kodjo and CO logo"
@@ -672,22 +666,22 @@ export default function App() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Show outage outlook"
-              accessibilityState={{ selected: activeNavigation === 'outlook' }}
-              onPress={() => navigateOverview('outlook')}
-              style={[styles.navigationItem, activeNavigation === 'outlook' && styles.navigationItemSelected]}
+              accessibilityState={{ selected: screen === 'outlook' }}
+              onPress={() => setScreen('outlook')}
+              style={[styles.navigationItem, screen === 'outlook' && styles.navigationItemSelected]}
             >
-              <Text style={[styles.navigationIcon, activeNavigation === 'outlook' && styles.navigationTextSelected]}>⌂</Text>
-              <Text style={[styles.navigationLabel, activeNavigation === 'outlook' && styles.navigationTextSelected]}>Outlook</Text>
+              <Text style={[styles.navigationIcon, screen === 'outlook' && styles.navigationTextSelected]}>⌂</Text>
+              <Text style={[styles.navigationLabel, screen === 'outlook' && styles.navigationTextSelected]}>Outlook</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Show current weather"
-              accessibilityState={{ selected: activeNavigation === 'weather' }}
-              onPress={() => navigateOverview('weather')}
-              style={[styles.navigationItem, activeNavigation === 'weather' && styles.navigationItemSelected]}
+              accessibilityState={{ selected: screen === 'weather' }}
+              onPress={() => setScreen('weather')}
+              style={[styles.navigationItem, screen === 'weather' && styles.navigationItemSelected]}
             >
-              <Text style={[styles.navigationIcon, activeNavigation === 'weather' && styles.navigationTextSelected]}>☼</Text>
-              <Text style={[styles.navigationLabel, activeNavigation === 'weather' && styles.navigationTextSelected]}>Weather</Text>
+              <Text style={[styles.navigationIcon, screen === 'weather' && styles.navigationTextSelected]}>☼</Text>
+              <Text style={[styles.navigationLabel, screen === 'weather' && styles.navigationTextSelected]}>Weather</Text>
             </Pressable>
           </BlurView>
           <Pressable

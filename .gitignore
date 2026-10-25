@@ -1,1 +1,8 @@
 /data/extracted/
+/backend/.venv/
+__pycache__/
+*.py[cod]
+.env
+.env.local
+mobile/.env
+mobile/.env.local

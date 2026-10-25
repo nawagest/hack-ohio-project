@@ -7,13 +7,15 @@ from backend.app.engine import Scenario, analyze, deterministic_answer, restorat
 def sample_dataset() -> Dataset:
     return Dataset(
         locations=(
-            DemoLocation("location_a", "internal-circuit-a", 2, frozenset({"pole"}), 10),
+            DemoLocation("location_a", "internal-circuit-a", 2, frozenset({"pole"}), 10, 37.3, -80.0),
             DemoLocation(
                 "location_b",
                 "internal-circuit-b",
                 8,
                 frozenset({"pole", "primary", "fuse"}),
                 50,
+                37.2,
+                -80.0,
             ),
         ),
         install_hours=2,
@@ -96,6 +98,51 @@ class AnalysisTests(unittest.TestCase):
         self.assertIn(f"{result['risk']['index']}/100", answer)
         for factor in result["risk"]["factors"]:
             self.assertIn(f"+{factor['contribution']}", answer)
+
+    def test_weather_question_uses_observed_conditions_and_timestamp(self) -> None:
+        result = analyze(sample_dataset(), Scenario("location_a", "moderate", 1, 2))
+        result["weather"] = {
+            "status": "available",
+            "stale": False,
+            "current_stale": True,
+            "fetched_at": "2026-10-25T05:05:36Z",
+            "current": {
+                "temperature_f": 49,
+                "description": "Clear",
+                "wind_mph": 0,
+                "observed_at": "2026-10-25T01:54:00+00:00",
+            },
+            "forecast": None,
+        }
+
+        answer = deterministic_answer("What's the current weather?", result)
+
+        self.assertIn("Clear, 49°F", answer)
+        self.assertIn("Last observed at", answer)
+        self.assertIn("over 90 minutes old", answer)
+        self.assertIn("not an outage prediction", answer)
+
+    def test_weather_alert_question_reports_official_alert(self) -> None:
+        result = analyze(sample_dataset(), Scenario("location_a", "moderate", 1, 2))
+        result["weather"] = {
+            "status": "available",
+            "stale": False,
+            "fetched_at": "2026-10-25T05:05:36Z",
+            "alerts": [
+                {
+                    "event": "Wind Advisory",
+                    "headline": "Wind Advisory until this evening",
+                    "severity": "Moderate",
+                    "expires": "2026-10-25T22:00:00Z",
+                }
+            ],
+        }
+
+        answer = deterministic_answer("Are there any weather alerts?", result)
+
+        self.assertIn("NWS alert", answer)
+        self.assertIn("Wind Advisory", answer)
+        self.assertIn("Severity: moderate", answer)
 
 
 if __name__ == "__main__":

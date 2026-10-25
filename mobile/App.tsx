@@ -16,6 +16,36 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
 type StormSeverity = 'light' | 'moderate' | 'severe';
 type DemoLocation = { id: string; label: string; description: string };
 type ChartPoint = { repair_count: number; hours: number };
+type WeatherAlert = {
+  event?: string | null;
+  headline?: string | null;
+  severity?: string | null;
+  effective?: string | null;
+  expires?: string | null;
+};
+type Weather = {
+  status: 'available' | 'unavailable';
+  source: string;
+  fetched_at?: string;
+  stale: boolean;
+  current_stale: boolean;
+  current: {
+    temperature_f: number | null;
+    description: string;
+    wind_mph: number | null;
+    wind_direction: string | null;
+    observed_at: string | null;
+  } | null;
+  forecast: {
+    period: string | null;
+    temperature_f: number | null;
+    short_forecast: string | null;
+    precipitation_probability: number | null;
+    starts_at: string | null;
+  } | null;
+  alerts: WeatherAlert[];
+  message?: string;
+};
 type Analysis = {
   location: { id: string; label: string };
   risk: {
@@ -41,6 +71,7 @@ type Analysis = {
   alert: { eligible: boolean; rule: string; message: string; delivery: string };
   preparation: string[];
   chart: ChartPoint[];
+  weather: Weather;
 };
 type ChatMessage = {
   id: string;
@@ -60,6 +91,12 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
     throw new Error(payload.detail ?? `Request failed (${response.status}).`);
   }
   return payload as T;
+}
+
+function formatTimestamp(value?: string | null): string {
+  if (!value) return 'time unavailable';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 function Pill({
@@ -281,6 +318,74 @@ export default function App() {
               ))}
             </View>
           </Card>
+
+          {analysis?.weather ? (
+            <Card style={analysis.weather.status !== 'available' ? styles.weatherUnavailable : undefined}>
+              <View style={styles.cardTopline}>
+                <View>
+                  <Text style={styles.sectionLabel}>CURRENT WEATHER</Text>
+                  <Text style={styles.cardTitle}>{analysis.weather.source}</Text>
+                </View>
+                <Text style={styles.weatherFreshness}>
+                  {analysis.weather.status !== 'available' ? 'OFFLINE' : analysis.weather.current_stale ? 'DELAYED' : analysis.weather.stale ? 'CACHED' : 'LIVE'}
+                </Text>
+              </View>
+              <Text style={styles.weatherMeta}>Sample GIS circuits are in southwest Virginia; weather uses rounded circuit centers, not customer addresses.</Text>
+
+              {analysis.weather.current ? (
+                <View style={styles.weatherCurrent}>
+                  <Text style={styles.weatherTemperature}>
+                    {analysis.weather.current.temperature_f === null ? '—' : `${analysis.weather.current.temperature_f}°`}
+                  </Text>
+                  <View style={styles.weatherCurrentDetails}>
+                    <Text style={styles.weatherDescription}>{analysis.weather.current.description}</Text>
+                    {analysis.weather.current.wind_mph !== null ? (
+                      <Text style={styles.weatherMeta}>
+                        Wind {analysis.weather.current.wind_mph} mph{analysis.weather.current.wind_direction ? ` ${analysis.weather.current.wind_direction}` : ''}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.weatherMeta}>Observed {formatTimestamp(analysis.weather.current.observed_at)}</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {analysis.weather.forecast ? (
+                <View style={styles.weatherForecast}>
+                  <Text style={styles.sectionLabel}>{analysis.weather.forecast.period ?? 'NEXT FORECAST'}</Text>
+                  <Text style={styles.bodyText}>
+                    {analysis.weather.forecast.short_forecast ?? 'Forecast details unavailable'}
+                    {analysis.weather.forecast.temperature_f !== null ? `, ${analysis.weather.forecast.temperature_f}°F` : ''}
+                    {analysis.weather.forecast.precipitation_probability !== null ? `, ${analysis.weather.forecast.precipitation_probability}% chance of precipitation` : ''}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.weatherAlerts}>
+                <Text style={styles.sectionLabel}>OFFICIAL WEATHER ALERTS</Text>
+                {analysis.weather.status !== 'available' ? (
+                  <Text style={styles.weatherMeta}>{analysis.weather.message ?? 'Live weather is temporarily unavailable.'}</Text>
+                ) : analysis.weather.alerts.length ? (
+                  analysis.weather.alerts.map((alert, index) => (
+                    <View key={`${alert.event ?? 'alert'}-${index}`} style={styles.weatherAlert}>
+                      <Text style={styles.weatherDescription}>{alert.event ?? 'Weather alert'}</Text>
+                      {alert.headline ? <Text style={styles.weatherMeta}>{alert.headline}</Text> : null}
+                      {alert.severity ? <Text style={styles.weatherMeta}>Severity: {alert.severity}</Text> : null}
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.weatherMeta}>No active NWS alerts for this sample area.</Text>
+                )}
+              </View>
+
+              {analysis.weather.status === 'available' ? (
+                <Text style={styles.chartFootnote}>
+                  {analysis.weather.stale ? 'Cached data. ' : ''}
+                  {analysis.weather.current_stale ? 'Latest station observation is over 90 minutes old. ' : ''}
+                  Updated {formatTimestamp(analysis.weather.fetched_at)}. Weather is regional context and does not change the outage-risk score.
+                </Text>
+              ) : null}
+            </Card>
+          ) : null}
 
           {error ? (
             <Card style={styles.errorCard}>
@@ -579,6 +684,16 @@ const styles = StyleSheet.create({
   chartBarSelected: { backgroundColor: '#D98690' },
   chartLabel: { color: '#6F8385', fontSize: 9, marginTop: 7 },
   chartFootnote: { color: '#879598', fontSize: 10, lineHeight: 15, marginTop: 11 },
+  weatherFreshness: { color: '#8E3543', backgroundColor: '#FCE8EA', overflow: 'hidden', borderRadius: 12, paddingHorizontal: 9, paddingVertical: 5, fontSize: 9, fontWeight: '800' },
+  weatherCurrent: { flexDirection: 'row', alignItems: 'center', gap: 13, marginTop: 12 },
+  weatherTemperature: { color: '#55212A', fontSize: 38, fontWeight: '700' },
+  weatherCurrentDetails: { flex: 1, gap: 3 },
+  weatherDescription: { color: '#354D52', fontSize: 13, lineHeight: 18, fontWeight: '700' },
+  weatherMeta: { color: '#718184', fontSize: 10, lineHeight: 15 },
+  weatherForecast: { borderTopWidth: 1, borderTopColor: '#F0E3E4', marginTop: 12, paddingTop: 12 },
+  weatherAlerts: { borderTopWidth: 1, borderTopColor: '#F0E3E4', marginTop: 12, paddingTop: 12, gap: 7 },
+  weatherAlert: { backgroundColor: '#FFF3F4', borderLeftWidth: 3, borderLeftColor: '#B42338', padding: 9, gap: 3 },
+  weatherUnavailable: { backgroundColor: '#FFF8F8' },
   alertCard: { backgroundColor: '#FFF3F4', borderColor: '#F0D0D4' },
   alertIcon: { color: '#B42338', fontSize: 23 },
   prepCard: { backgroundColor: '#FBF8F1', borderColor: '#EEE8D9' },

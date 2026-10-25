@@ -24,6 +24,8 @@ class DemoLocation:
     damage_records: int
     asset_types: frozenset[str]
     topology_records: int
+    weather_latitude: float
+    weather_longitude: float
 
     @property
     def label(self) -> str:
@@ -70,6 +72,37 @@ def _normalize_circuit(value: object) -> str:
     if suffix:
         return str(int(suffix.group(1)))
     return circuit.casefold()
+
+
+def _customer_circuit_centers(archive_path: Path) -> dict[str, tuple[float, float]]:
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            reader = shapefile.Reader(
+                shp=io.BytesIO(archive.read("Customer_Clip.shp")),
+                shx=io.BytesIO(archive.read("Customer_Clip.shx")),
+                dbf=io.BytesIO(archive.read("Customer_Clip.dbf")),
+                encoding="utf-8",
+            )
+            coordinate_sums: dict[str, list[float]] = {}
+            for record, shape in zip(
+                reader.iterRecords(fields=["circuit_id"]), reader.iterShapes()
+            ):
+                circuit = _normalize_circuit(record["circuit_id"])
+                if not circuit or not shape.points:
+                    continue
+                longitude, latitude = shape.points[0]
+                totals = coordinate_sums.setdefault(circuit, [0.0, 0.0, 0.0])
+                totals[0] += latitude
+                totals[1] += longitude
+                totals[2] += 1
+    except (OSError, KeyError, zipfile.BadZipFile, shapefile.ShapefileException) as exc:
+        raise RuntimeError(f"Could not read customer region coordinates: {exc}") from exc
+
+    return {
+        circuit: (round(totals[0] / totals[2], 1), round(totals[1] / totals[2], 1))
+        for circuit, totals in coordinate_sums.items()
+        if totals[2]
+    }
 
 
 def _load_labor_reference() -> tuple[float, float, float]:
@@ -133,7 +166,8 @@ def load_dataset() -> Dataset:
         for record in customer_records
         if str(record.get("circuit_id") or "").strip()
     }
-    matched_circuits = customer_circuits.intersection(damage_counts)
+    customer_centers = _customer_circuit_centers(customer_path)
+    matched_circuits = customer_circuits.intersection(damage_counts, customer_centers)
     if not matched_circuits:
         raise RuntimeError(
             "No customer circuits matched the historical damage records. "
@@ -185,6 +219,8 @@ def load_dataset() -> Dataset:
             damage_records=damage_counts[circuit],
             asset_types=frozenset(assets_by_circuit.get(circuit, set())),
             topology_records=topology_counts[circuit],
+            weather_latitude=customer_centers[circuit][0],
+            weather_longitude=customer_centers[circuit][1],
         )
         for index, circuit in enumerate(selected_circuits)
     )

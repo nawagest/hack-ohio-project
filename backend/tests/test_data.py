@@ -19,6 +19,13 @@ class ChallengeDataTests(unittest.TestCase):
         self.assertGreater(dataset.damage_record_count, 0)
         self.assertGreater(dataset.topology_record_count, 0)
         self.assertTrue(all(location.label.startswith("Sample location ") for location in dataset.locations))
+        self.assertTrue(
+            all(
+                location.weather_latitude == round(location.weather_latitude, 1)
+                and location.weather_longitude == round(location.weather_longitude, 1)
+                for location in dataset.locations
+            )
+        )
 
 
 if __name__ == "__main__":

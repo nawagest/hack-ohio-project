@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .data import Dataset, load_dataset
 from .engine import Scenario, analyze, deterministic_answer, greeting_response
+from .weather import get_weather
 
 
 app = FastAPI(
@@ -83,6 +84,7 @@ def _ollama_answer(question: str, result: dict) -> str:
         "restoration": result["restoration"],
         "preparation": result["preparation"],
         "alert": result["alert"],
+        "weather": result["weather"],
     }
     payload = json.dumps(
         {
@@ -98,7 +100,10 @@ def _ollama_answer(question: str, result: dict) -> str:
                         "the key fact, reason, and limitation when relevant. Do not "
                         "repeat the full scenario or add unrelated advice. Respond "
                         "naturally to greetings and ask what they would like to know. "
-                        "Only explain the supplied calculated results and assumptions. "
+                        "Only explain the supplied calculated results, current weather "
+                        "data, official weather alerts, and assumptions. Treat weather "
+                        "as regional context; do not change the outage-risk score based "
+                        "on it. "
                         "Never invent outage probabilities, utility confirmations, "
                         "customer identities, or restoration promises. State that the "
                         "risk index is not a probability and restoration is a scenario "
@@ -186,7 +191,13 @@ def locations() -> dict[str, list[dict[str, str]]]:
 def analyze_request(request: AnalysisRequest) -> dict:
     dataset = _dataset()
     try:
-        return analyze(dataset, _scenario(request))
+        result = analyze(dataset, _scenario(request))
+        location = dataset.location(request.location_id)
+        result["weather"] = get_weather(
+            location.weather_latitude,
+            location.weather_longitude,
+        )
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -200,6 +211,11 @@ def assistant(request: AssistantRequest) -> dict:
     dataset = _dataset()
     try:
         result = analyze(dataset, _scenario(request))
+        location = dataset.location(request.location_id)
+        result["weather"] = get_weather(
+            location.weather_latitude,
+            location.weather_longitude,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

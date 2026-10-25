@@ -157,7 +157,7 @@ def analyze(dataset: Dataset, scenario: Scenario) -> dict:
                 ),
             ],
             "limitations": [
-                "No live weather forecast is connected; storm severity is a demo scenario.",
+                "Live regional NWS weather is shown separately and does not affect this score; storm severity is a demo scenario.",
                 "Historical damage records are not calibrated outage outcomes.",
                 "No customer-specific outage or restoration status is available.",
             ],
@@ -220,6 +220,36 @@ def deterministic_answer(question: str, result: dict) -> str:
 
     risk = result["risk"]
     restoration = result["restoration"]
+    weather = result.get("weather", {})
+    if asks_about("weather", "forecast", "temperature", "rain", "wind", "snow") and not asks_about(
+        "alert", "alerts", "warning", "warnings"
+    ):
+        if weather.get("status") != "available":
+            return weather.get(
+                "message",
+                "Live weather is unavailable right now. The outage-risk score does not include live weather.",
+            )
+        current = weather.get("current")
+        forecast = weather.get("forecast")
+        details = []
+        if current:
+            conditions = current.get("description") or "Current conditions"
+            if current.get("temperature_f") is not None:
+                conditions += f", {current['temperature_f']}°F"
+            if current.get("wind_mph") is not None:
+                conditions += f", wind {current['wind_mph']} mph"
+            details.append(conditions)
+        if forecast and forecast.get("short_forecast"):
+            period = forecast.get("period") or "Next forecast period"
+            details.append(f"{period}: {forecast['short_forecast']}")
+        if not details:
+            return "The weather service has no current observation or forecast for this sample area."
+        freshness = " The latest station observation is over 90 minutes old." if weather.get("current_stale") else ""
+        if weather.get("stale"):
+            freshness += " This information is from a cached response."
+        observed_at = current.get("observed_at") if current else None
+        updated = f" Last observed at {observed_at}." if observed_at else f" Data fetched at {weather.get('fetched_at')}."
+        return f"{' '.join(details)}.{updated}{freshness} This is regional weather context, not an outage prediction."
     if asks_about("prepare", "preparation", "ready", "safety", "safe"):
         return (
             "Charge phones and essential battery-powered devices, keep a flashlight "
@@ -233,10 +263,24 @@ def deterministic_answer(question: str, result: dict) -> str:
             "scenarios, not confirmed restoration times."
         )
     if asks_about("alert", "alerts", "notify", "notification", "notifications"):
+        official_alerts = weather.get("alerts", [])
+        if weather.get("status") == "available" and official_alerts:
+            alert = official_alerts[0]
+            headline = alert.get("headline") or alert.get("event") or "Active weather alert"
+            severity = alert.get("severity")
+            severity_text = f" Severity: {severity.lower()}." if severity else ""
+            expiry = f" It expires at {alert['expires']}." if alert.get("expires") else ""
+            freshness = " This is cached information." if weather.get("stale") else ""
+            return f"NWS alert: {headline}.{severity_text}{expiry}{freshness} Check the official alert for instructions."
+        official_status = (
+            f"No active NWS alerts were returned for this sample area as of {weather.get('fetched_at')}."
+            if weather.get("status") == "available"
+            else "Live NWS alerts are temporarily unavailable."
+        )
         return (
-            f"This sample {'meets' if result['alert']['eligible'] else 'does not meet'} "
-            "the demo alert rule because its relative risk is "
-            f"{risk['band'].lower()}. No alert is sent by this prototype."
+            f"{official_status} The separate demo outage-alert rule "
+            f"{'is met' if result['alert']['eligible'] else 'is not met'}; "
+            "this prototype does not send notifications."
         )
     if asks_about("why") and asks_about("restore", "restoration", "repair", "time"):
         return (

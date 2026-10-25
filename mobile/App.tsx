@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { BlurView } from 'expo-blur';
+import { useEffect, useRef, useState } from 'react';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
@@ -9,6 +10,7 @@ import {
   Text,
   TextInput,
   View,
+  type ScrollViewInstance,
 } from 'react-native';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -179,6 +181,9 @@ export default function App() {
       text: 'Hi! I can explain this demo risk estimate, compare repair scenarios, or suggest storm preparations.',
     },
   ]);
+  const overviewScrollRef = useRef<ScrollViewInstance | null>(null);
+  const [weatherOffset, setWeatherOffset] = useState(0);
+  const [activeNavigation, setActiveNavigation] = useState<'outlook' | 'weather'>('outlook');
 
   useEffect(() => {
     let active = true;
@@ -269,6 +274,14 @@ export default function App() {
     }
   }
 
+  function navigateOverview(section: 'outlook' | 'weather') {
+    setActiveNavigation(section);
+    overviewScrollRef.current?.scrollTo({
+      y: section === 'weather' ? weatherOffset : 0,
+      animated: true,
+    });
+  }
+
   const locationLabel = locations.find((location) => location.id === locationId)?.label;
 
   return (
@@ -285,7 +298,17 @@ export default function App() {
       </View>
 
       {screen === 'overview' ? (
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          ref={overviewScrollRef}
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          onScroll={(event) => {
+            if (weatherOffset > 0) {
+              setActiveNavigation(event.nativeEvent.contentOffset.y >= weatherOffset - 80 ? 'weather' : 'outlook');
+            }
+          }}
+          scrollEventThrottle={16}
+        >
           <Text style={styles.eyebrow}>PLAN AHEAD</Text>
           <Text style={styles.heading}>Your storm outlook</Text>
           <Text style={styles.subtitle}>Explore a transparent scenario using anonymized challenge data.</Text>
@@ -320,6 +343,7 @@ export default function App() {
           </Card>
 
           {analysis?.weather ? (
+            <View onLayout={(event) => setWeatherOffset(event.nativeEvent.layout.y)}>
             <Card style={analysis.weather.status !== 'available' ? styles.weatherUnavailable : undefined}>
               <View style={styles.cardTopline}>
                 <View>
@@ -385,6 +409,7 @@ export default function App() {
                 </Text>
               ) : null}
             </Card>
+            </View>
           ) : null}
 
           {error ? (
@@ -590,13 +615,36 @@ export default function App() {
 
       {screen === 'overview' ? (
         <View style={styles.assistantFooter}>
+          <BlurView intensity={75} tint="light" style={styles.glassNavigation}>
+            <View pointerEvents="none" style={styles.glassHighlight} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Show outage outlook"
+              accessibilityState={{ selected: activeNavigation === 'outlook' }}
+              onPress={() => navigateOverview('outlook')}
+              style={[styles.navigationItem, activeNavigation === 'outlook' && styles.navigationItemSelected]}
+            >
+              <Text style={[styles.navigationIcon, activeNavigation === 'outlook' && styles.navigationTextSelected]}>⌂</Text>
+              <Text style={[styles.navigationLabel, activeNavigation === 'outlook' && styles.navigationTextSelected]}>Outlook</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Show current weather"
+              accessibilityState={{ selected: activeNavigation === 'weather' }}
+              onPress={() => navigateOverview('weather')}
+              style={[styles.navigationItem, activeNavigation === 'weather' && styles.navigationItemSelected]}
+            >
+              <Text style={[styles.navigationIcon, activeNavigation === 'weather' && styles.navigationTextSelected]}>☼</Text>
+              <Text style={[styles.navigationLabel, activeNavigation === 'weather' && styles.navigationTextSelected]}>Weather</Text>
+            </Pressable>
+          </BlurView>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Ask the assistant"
             style={styles.assistantButton}
             onPress={() => setScreen('assistant')}
           >
-            <Text style={styles.assistantButtonIcon}>✳</Text>
+            <Text style={styles.assistantButtonIcon}>AI</Text>
           </Pressable>
         </View>
       ) : null}
@@ -716,8 +764,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 8,
     paddingBottom: 12,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
+  glassNavigation: {
+    height: 62,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: 'rgba(255, 255, 255, 0.56)',
+    overflow: 'hidden',
+    shadowColor: '#6E5053',
+    shadowOpacity: 0.11,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 5,
+  },
+  glassHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 18,
+    right: 18,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+  },
+  navigationItem: {
+    minWidth: 96,
+    height: 46,
+    paddingHorizontal: 12,
+    borderRadius: 17,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  navigationItemSelected: {
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+  },
+  navigationIcon: { color: '#758184', fontSize: 19, lineHeight: 23 },
+  navigationLabel: { color: '#68777A', fontSize: 11, fontWeight: '700' },
+  navigationTextSelected: { color: '#8E2433' },
   assistantButton: {
     width: 60,
     height: 60,
@@ -731,7 +822,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
-  assistantButtonIcon: { color: '#FFFFFF', fontSize: 25, lineHeight: 30 },
+  assistantButtonIcon: { color: '#FFFFFF', fontSize: 15, letterSpacing: 0.6, fontWeight: '800' },
   backButton: { alignSelf: 'flex-start', paddingVertical: 9, paddingHorizontal: 11, marginLeft: -8, marginBottom: 18 },
   backText: { color: '#A51D32', fontSize: 10, letterSpacing: 1, fontWeight: '800' },
   quickPrompts: { gap: 8, marginBottom: 19 },
